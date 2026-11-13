@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Коды — штрих-код и Data Matrix</title>
+<meta name="description" content="Создать и отсканировать штрих-код и Data Matrix прямо в браузере">
+<script src="lib/zxing.js"></script>
+<style>
+  :root { --bg: #f6f7fb; --card: #fff; --ink: #161a24; --muted: #6b7385; --line: #e4e7ef; --accent: #4f5fe8;
+          --accent-soft: #eef0ff; --ok: #12a26b; --err: #d64545; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 36px 20px 48px; }
+  header { text-align: center; margin-bottom: 26px; }
+  .logo { width: 44px; height: 44px; border-radius: 12px; background: var(--accent); display: inline-grid;
+          grid-template-columns: repeat(3, 8px); gap: 3px; place-content: center; }
+  .logo i { width: 8px; height: 8px; background: #fff; border-radius: 1.5px; }
+  .logo i:nth-child(2), .logo i:nth-child(4), .logo i:nth-child(9) { opacity: .25; }
+  h1 { font-size: 26px; margin: 12px 0 4px; letter-spacing: -.3px; }
+  header p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: #e9ebf3; border-radius: 12px;
+         padding: 4px; gap: 4px; }
+  .seg button { border: 0; background: transparent; font: inherit; font-size: 15px; font-weight: 600; color: var(--muted);
+                padding: 9px 10px; border-radius: 9px; cursor: pointer; transition: background .15s, color .15s; }
+  .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(20,25,45,.12); }
+  .tabs { margin-bottom: 18px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px;
+          box-shadow: 0 8px 30px rgba(20,25,45,.05); }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 7px; }
+  textarea { width: 100%; min-height: 84px; resize: vertical; font: inherit; color: var(--ink); background: var(--bg);
+             border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; outline: none; }
+  textarea:focus { border-color: var(--accent); background: #fff; }
+  .field { margin-bottom: 16px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .preview { margin-top: 18px; border: 1px dashed var(--line); border-radius: 14px; min-height: 230px;
+             display: grid; place-items: center; padding: 22px; }
+  .preview svg { display: block; max-width: 100%; height: auto; }
+  .preview.dm svg { width: 200px; height: 200px; }
+  .preview.bc svg { width: 100%; max-height: 150px; }
+  .preview .empty { color: var(--muted); font-size: 14px; text-align: center; }
+  .meta { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 10px; }
+  .meta span { font-size: 13px; color: var(--muted); }
+  .err { color: var(--err); font-size: 14px; text-align: center; }
+
+  .btn { border: 0; font: inherit; font-weight: 600; font-size: 15px; border-radius: 11px; padding: 11px 18px; cursor: pointer;
+         background: var(--accent); color: #fff; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: var(--accent-soft); color: var(--accent); }
+  .btn:disabled { opacity: .45; cursor: default; filter: none; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  .cam { position: relative; aspect-ratio: 4 / 3; background: #10131c; border-radius: 14px; overflow: hidden;
+         display: grid; place-items: center; color: #aeb5c8; font-size: 14px; text-align: center; }
+  .cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cam .frame { position: absolute; inset: 18% 22%; border-radius: 16px; box-shadow: 0 0 0 999px rgba(10,12,20,.35);
+                border: 2px solid rgba(255,255,255,.85); display: none; }
+  .cam.live .frame { display: block; }
+  .cam.found .frame { border-color: #3ddc97; }
+  .scan-actions { margin-top: 16px; }
+
+  .result { margin-top: 18px; display: none; background: var(--bg); border-radius: 14px; padding: 16px; }
+  .result.show { display: block; animation: pop .25s ease-out; }
+  @keyframes pop { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .badge { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .4px; color: var(--ok);
+           background: #e3f6ee; border-radius: 99px; padding: 3px 10px; margin-bottom: 8px; }
+  .result .text { white-space: pre-wrap; word-break: break-word; font-size: 16px; margin-bottom: 14px; }
+  .result .row { justify-content: flex-start; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 26px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <h1>Коды</h1>
+    <p>Создать и прочитать штрих-код и Data Matrix</p>
+  </header>
+
+  <div class="seg tabs" id="tabs">
+    <button class="on" data-tab="make">Создать</button>
+    <button data-tab="scan">Сканировать</button>
+  </div>
+
+  <!-- Создать -->
+  <section class="card" id="make">
+    <div class="field">
+      <label for="text">Что зашифровать</label>
+      <textarea id="text" placeholder="Текст, ссылка или номер"></textarea>
+    </div>
+    <label>Вид кода</label>
+    <div class="seg" id="formats">
+      <button class="on" data-format="Code128">Штрих-код</button>
+      <button data-format="DataMatrix">Data Matrix</button>
+    </div>
+    <div class="hint" id="formatHint"></div>
+    <div class="preview" id="preview"><div class="empty">Загружаю…</div></div>
+    <div class="meta">
+      <span id="size"></span>
+      <button class="btn" id="download" disabled>Скачать PNG</button>
+    </div>
+  </section>
+
+  <!-- Сканировать -->
+  <section class="card" id="scan" hidden>
+    <div class="cam" id="cam">
+      <video id="video" playsinline muted hidden></video>
+      <div class="frame"></div>
+      <div id="camText">Наведи камеру на штрих-код или Data Matrix</div>
+    </div>
+    <div class="row scan-actions">
+      <button class="btn" id="camBtn">Включить камеру</button>
+      <button class="btn ghost" id="fileBtn">Выбрать фото</button>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+    <div class="result" id="result">
+      <div class="badge" id="resFormat"></div>
+      <div class="text" id="resText"></div>
+      <div class="row">
+        <a class="btn" id="resOpen" target="_blank" rel="noopener" hidden>Открыть ссылку</a>
+        <button class="btn ghost" id="resCopy">Скопировать</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>Всё работает прямо в браузере — ничего не отправляется на сервер</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const { writeBarcode, readBarcodes, prepareZXingModule } = ZXingWASM;
+// .wasm лежит рядом, в lib/ — сайт не зависит от чужих серверов
+prepareZXingModule({ overrides: { locateFile: (path, prefix) => path.endsWith(".wasm") ? "lib/" + path : prefix + path } });
+
+const NAMES = { Code128: "Штрих-код · Code 128", DataMatrix: "Data Matrix" };
+const HINTS = { Code128: "Линейный код: латиница, цифры и знаки, до ~40 символов. Как на товарах и пропусках.",
+                DataMatrix: "Квадратный 2D-код: вмещает много текста, в том числе русские буквы. Читается, даже если часть стёрта." };
+let format = "Code128", png = null;
+
+// ---------- вкладки ----------
+$("tabs").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  for (const x of $("tabs").children) x.classList.toggle("on", x === b);
+  $("make").hidden = b.dataset.tab !== "make";
+  $("scan").hidden = b.dataset.tab !== "scan";
+  if (b.dataset.tab !== "scan") stopCamera();
+};
+
+// ---------- создать ----------
+$("formats").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  for (const x of $("formats").children) x.classList.toggle("on", x === b);
+  format = b.dataset.format;
+  make();
+};
+
+let pending = 0;
+async function make() {
+  const text = $("text").value.trim();
+  const ticket = ++pending;  // ответ на старый ввод, пришедший позже нового, не показываем
+  $("formatHint").textContent = HINTS[format];
+  $("preview").className = "preview " + (format === "DataMatrix" ? "dm" : "bc");
+  if (!text) return show('<div class="empty">Введите текст — код появится здесь</div>', "", null);
+  if (format === "Code128" && /[^\x20-\x7e]/.test(text))
+    return show('<div class="err">Штрих-код понимает только латиницу, цифры и знаки.<br>Для русского текста выберите Data Matrix.</div>', "", null);
+  try {
+    const r = await writeBarcode(text, { format, scale: 6, addQuietZones: true, addHRT: format === "Code128" });
+    if (ticket !== pending) return;
+    if (r.error) throw new Error(r.error);
+    const sym = r.symbol;
+    const size = format === "DataMatrix" ? `${sym.width}×${sym.height} клеток` : `${text.length} символов`;
+    // у SVG от библиотеки нет viewBox — без него браузер обрезает картинку вместо того, чтобы уменьшить
+    const svg = r.svg.replace(/<svg width="(\d+)" height="(\d+)"/, '<svg viewBox="0 0 $1 $2"');
+    show(svg, `${NAMES[format]} · ${size}`, r.image);
+  } catch (err) {
+    if (ticket === pending) show(`<div class="err">Не получилось: ${err.message}</div>`, "", null);
+  }
+}
+function show(html, size, image) {
+  $("preview").innerHTML = html;
+  $("size").textContent = size;
+  png = image;
+  $("download").disabled = !image;
+}
+$("text").addEventListener("input", make);
+$("download").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(png);
+  a.download = (format === "DataMatrix" ? "datamatrix" : "barcode") + ".png";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+// ---------- сканировать ----------
+const READ = { formats: ["Code128", "DataMatrix"], tryHarder: true, maxNumberOfSymbols: 1 };
+let stream = null, timer = null;
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
+  } catch (err) {
+    $("camText").textContent = "Камера недоступна: разрешите доступ к ней или выберите фото.";
+    return;
+  }
+  const v = $("video");
+  v.srcObject = stream; v.hidden = false; await v.play();
+  $("cam").classList.add("live"); $("cam").classList.remove("found");
+  $("camText").hidden = true;
+  $("camBtn").textContent = "Выключить камеру";
+  scanLoop();
+}
+function stopCamera() {
+  clearTimeout(timer);
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  $("video").hidden = true;
+  $("cam").classList.remove("live");
+  $("camText").hidden = false;
+  $("camBtn").textContent = "Включить камеру";
+}
+async function scanLoop() {
+  if (!stream) return;
+  const v = $("video");
+  if (v.videoWidth) {
+    canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+    ctx.drawImage(v, 0, 0);
+    const found = await readBarcodes(ctx.getImageData(0, 0, canvas.width, canvas.height), READ);
+    if (found.length && found[0].isValid) {
+      $("cam").classList.add("found");
+      showResult(found[0]);
+      navigator.vibrate?.(60);
+      setTimeout(stopCamera, 500);  // нашли — останавливаемся, чтобы результат не мигал
+      return;
+    }
+  }
+  timer = setTimeout(scanLoop, 200);
+}
+$("camBtn").onclick = () => stream ? stopCamera() : startCamera();
+$("fileBtn").onclick = () => $("file").click();
+$("file").onchange = async () => {
+  const f = $("file").files[0]; if (!f) return;
+  stopCamera();
+  const found = await readBarcodes(f, READ);
+  $("file").value = "";
+  if (found.length && found[0].isValid) showResult(found[0]);
+  else showResult(null);
+};
+
+function showResult(r) {
+  const box = $("result");
+  box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
+  if (!r) {
+    $("resFormat").textContent = "НЕ НАЙДЕНО";
+    $("resFormat").style.cssText = "color: var(--err); background: #fbe9e9";
+    $("resText").textContent = "На фото не нашёлся штрих-код или Data Matrix. Попробуйте снимок ровнее и крупнее.";
+    $("resOpen").hidden = true; $("resCopy").hidden = true;
+    return;
+  }
+  $("resFormat").style.cssText = "";
+  $("resFormat").textContent = (r.format === "DataMatrix" ? "DATA MATRIX" : "ШТРИХ-КОД · CODE 128");
+  $("resText").textContent = r.text;
+  const url = /^https?:\/\/\S+$/i.test(r.text.trim()) ? r.text.trim() : "";
+  $("resOpen").hidden = !url; $("resOpen").href = url || "#";
+  $("resCopy").hidden = false;
+}
+$("resCopy").onclick = async () => {
+  await navigator.clipboard.writeText($("resText").textContent);
+  $("resCopy").textContent = "Скопировано ✓";
+  setTimeout(() => $("resCopy").textContent = "Скопировать", 1500);
+};
+
+// по умолчанию — ссылка на этот сайт: отсканировал штрих-код и попал сюда же
+$("text").value = location.protocol.startsWith("http") ? location.origin + location.pathname : "https://theultranilla.github.io/codes/";
+make();
+</script>
+</body>
+</html>
