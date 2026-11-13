@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Коды — штрих-код и Data Matrix</title>
 <meta name="description" content="Создать и отсканировать штрих-код и Data Matrix прямо в браузере">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%234f5fe8'/%3E%3Cpath d='M4 4h2v2H4zM10 4h2v2h-2zM7 7h2v2H7zM4 10h2v2H4zM10 10h2v2h-2z' fill='white'/%3E%3C/svg%3E">
 <script src="lib/zxing.js"></script>
 <style>
   :root { --bg: #f6f7fb; --card: #fff; --ink: #161a24; --muted: #6b7385; --line: #e4e7ef; --accent: #4f5fe8;
@@ -168,7 +169,8 @@ async function make() {
   if (format === "Code128" && /[^\x20-\x7e]/.test(text))
     return show('<div class="err">Штрих-код понимает только латиницу, цифры и знаки.<br>Для русского текста выберите Data Matrix.</div>', "", null);
   try {
-    const r = await writeBarcode(text, { format, scale: 6, addQuietZones: true, addHRT: format === "Code128" });
+    const r = await writeBarcode(text, { format, scale: 6, addQuietZones: true, addHRT: format === "Code128",
+                                         options: format === "DataMatrix" ? "forceSquare" : "" });  // квадрат привычнее прямоугольного
     if (ticket !== pending) return;
     if (r.error) throw new Error(r.error);
     const sym = r.symbol;
