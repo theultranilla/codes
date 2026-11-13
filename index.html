@@ -170,7 +170,9 @@ async function make() {
     return show('<div class="err">Штрих-код понимает только латиницу, цифры и знаки.<br>Для русского текста выберите Data Matrix.</div>', "", null);
   try {
     const r = await writeBarcode(text, { format, scale: 6, addQuietZones: true, addHRT: format === "Code128",
-                                         options: format === "DataMatrix" ? "forceSquare" : "" });  // квадрат привычнее прямоугольного
+                                         options: format === "DataMatrix" ? "forceSquare,eci=26" : "" });
+    // квадрат привычнее прямоугольного; eci=26 — UTF-8: иначе кириллица уходит в ISO-8859-5, и сканеры телефонов
+    // показывают кракозябры
     if (ticket !== pending) return;
     if (r.error) throw new Error(r.error);
     const sym = r.symbol;
